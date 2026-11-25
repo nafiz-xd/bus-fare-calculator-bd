@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bus Fare Calculator BD — Real BRTA Rates</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --slate-950: #0b1120;
+    --slate-900: #0f172a;
+    --slate-800: #1e293b;
+    --slate-700: #334155;
+    --slate-400: #94a3b8;
+    --slate-300: #cbd5e1;
+    --amber: #f59e0b;
+    --amber-light: #fbbf24;
+    --amber-dark: #b45309;
+    --ticket: #fffbeb;
+    --ink: #1c1917;
+  }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+    background: var(--slate-950);
+    color: var(--slate-300);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  /* subtle road stripes at the top */
+  .road {
+    height: 10px;
+    background: repeating-linear-gradient(90deg, var(--amber) 0 46px, transparent 46px 92px);
+    opacity: .85;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 0 16px 48px; width: 100%; }
+  header { text-align: center; padding: 28px 0 8px; }
+  .bus-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--amber); color: #111827;
+    font-weight: 800; letter-spacing: .14em; font-size: 12px;
+    padding: 6px 14px; border-radius: 999px; text-transform: uppercase;
+  }
+  .bus-badge svg { width: 18px; height: 18px; }
+  h1 { color: #f8fafc; font-size: 30px; line-height: 1.15; margin: 14px 0 6px; font-weight: 800; }
+  h1 span { color: var(--amber-light); }
+  .sub { color: var(--slate-400); font-size: 14px; line-height: 1.5; max-width: 480px; margin: 0 auto; }
+  .rate-chip {
+    display: inline-block; margin-top: 12px; font-size: 12px; color: var(--amber-light);
+    border: 1px solid #78350f; background: #451a03; padding: 5px 12px; border-radius: 999px;
+  }
+
+  .panel {
+    background: var(--slate-900);
+    border: 1px solid var(--slate-800);
+    border-radius: 16px;
+    padding: 20px;
+    margin-top: 20px;
+  }
+  .panel h2 { color: #f8fafc; font-size: 16px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+  .panel h2::before { content: ""; width: 10px; height: 10px; background: var(--amber); border-radius: 2px; flex: none; }
+  label.field-label { display: block; font-size: 13px; font-weight: 600; color: var(--slate-300); margin: 16px 0 6px; }
+  label.field-label:first-of-type { margin-top: 0; }
+
+  /* route type segmented control */
+  .seg { display: grid; grid-template-columns: 1fr; gap: 8px; }
+  .seg label {
+    display: flex; align-items: center; gap: 10px; cursor: pointer;
+    border: 1px solid var(--slate-700); border-radius: 12px; padding: 12px 14px;
+    background: var(--slate-800); transition: border-color .15s, background .15s;
+  }
+  .seg label:hover { border-color: var(--amber); }
+  .seg input { accent-color: var(--amber); width: 18px; height: 18px; flex: none; }
+  .seg label:has(input:checked) { border-color: var(--amber); background: #2a1f08; }
+  .seg .t { font-weight: 700; color: #f8fafc; font-size: 14px; }
+  .seg .d { font-size: 12px; color: var(--slate-400); margin-top: 2px; line-height: 1.4; }
+  .seg .r { margin-left: auto; font-weight: 800; color: var(--amber-light); font-size: 13px; white-space: nowrap; }
+
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  input[type="number"] {
+    width: 100%; background: var(--slate-800); border: 1px solid var(--slate-700);
+    color: #f8fafc; border-radius: 10px; padding: 12px 14px; font-size: 16px; outline: none;
+  }
+  input[type="number"]:focus { border-color: var(--amber); box-shadow: 0 0 0 3px rgba(245,158,11,.25); }
+  .hint { font-size: 12px; color: var(--slate-400); margin-top: 5px; line-height: 1.4; }
+
+  /* toggles */
+  .toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+  .toggle {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    background: var(--slate-800); border: 1px solid var(--slate-700); border-radius: 12px; padding: 12px 14px;
+    cursor: pointer; user-select: none;
+  }
+  .toggle .tt { font-size: 13px; font-weight: 700; color: #f8fafc; line-height: 1.3; }
+  .toggle .td { font-size: 11px; color: var(--slate-400); margin-top: 2px; line-height: 1.3; }
+  .switch { position: relative; width: 44px; height: 24px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .track {
+    position: absolute; inset: 0; background: var(--slate-700); border-radius: 999px; transition: background .2s;
+  }
+  .track::after {
+    content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px;
+    background: #fff; border-radius: 50%; transition: transform .2s;
+  }
+  .switch input:checked + .track { background: var(--amber); }
+  .switch input:checked + .track::after { transform: translateX(20px); }
+  .switch input:focus-visible + .track { outline: 2px solid var(--amber-light); outline-offset: 2px; }
+
+  .calc-btn {
+    width: 100%; margin-top: 20px; padding: 15px; font-size: 17px; font-weight: 800;
+    color: #111827; background: linear-gradient(180deg, var(--amber-light), var(--amber));
+    border: none; border-radius: 12px; cursor: pointer; letter-spacing: .02em;
+  }
+  .calc-btn:hover { filter: brightness(1.06); }
+  .calc-btn:active { transform: translateY(1px); }
+  .error { color: #fca5a5; font-size: 13px; margin-top: 10px; display: none; }
+
+  /* ---- ticket stub result ---- */
+  #result { display: none; margin-top: 20px; }
+  .ticket {
+    position: relative; background: var(--ticket); color: var(--ink);
+    border-radius: 14px; overflow: visible;
+    box-shadow: 0 10px 30px rgba(0,0,0,.45);
+  }
+  /* side notches (punched holes) */
+  .ticket::before, .ticket::after {
+    content: ""; position: absolute; top: 50%; width: 22px; height: 22px;
+    background: var(--slate-950); border-radius: 50%; transform: translateY(-50%); z-index: 2;
+  }
+  .ticket::before { left: -11px; }
+  .ticket::after { right: -11px; }
+  .ticket-head {
+    background: var(--amber); color: #111827; padding: 12px 20px;
+    border-radius: 14px 14px 0 0; display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  }
+  .ticket-head .th-t { font-weight: 800; letter-spacing: .12em; font-size: 12px; text-transform: uppercase; }
+  .ticket-head .th-n { font-weight: 800; font-size: 12px; font-family: ui-monospace, monospace; }
+  .ticket-body { padding: 18px 20px 6px; }
+  .ticket-route { font-size: 15px; font-weight: 700; color: #292524; }
+  .ticket-route small { display: block; font-weight: 500; color: #78716c; font-size: 12px; margin-top: 2px; }
+  .fare-big { text-align: center; margin: 14px 0 4px; }
+  .fare-big .amount { font-size: 46px; font-weight: 800; color: #111827; line-height: 1; }
+  .fare-big .cur { font-size: 22px; font-weight: 800; color: var(--amber-dark); }
+  .fare-big .lbl { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: #78716c; margin-top: 4px; }
+  /* perforated edge */
+  .perf { border-top: 2px dashed #d6d3d1; margin: 14px 0 0; position: relative; }
+  .breakdown { padding: 12px 20px 18px; font-size: 13.5px; }
+  .breakdown .line { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; color: #44403c; }
+  .breakdown .line span:last-child { font-weight: 700; color: #1c1917; white-space: nowrap; }
+  .breakdown .line.total { border-top: 1px solid #e7e5e4; margin-top: 6px; padding-top: 10px; font-size: 15px; }
+  .breakdown .line.total span { color: #111827; font-weight: 800; }
+  .breakdown .note { font-size: 12px; color: #78716c; margin-top: 8px; line-height: 1.5; }
+  .ticket-foot {
+    background: #292524; color: #fbbf24; text-align: center; font-size: 11px; letter-spacing: .2em;
+    padding: 9px; border-radius: 0 0 14px 14px; text-transform: uppercase; font-weight: 700;
+  }
+  .ticket-actions { display: flex; gap: 10px; margin-top: 12px; }
+  .ticket-actions button {
+    flex: 1; padding: 11px; border-radius: 10px; font-weight: 700; font-size: 14px; cursor: pointer;
+  }
+  .btn-copy { background: var(--amber); color: #111827; border: none; }
+  .btn-clear-ticket { background: transparent; color: var(--slate-300); border: 1px solid var(--slate-700); }
+  .copied-msg { text-align: center; font-size: 12px; color: var(--amber-light); margin-top: 8px; display: none; }
+
+  /* presets */
+  .presets { display: flex; flex-wrap: wrap; gap: 8px; }
+  .preset {
+    background: var(--slate-800); border: 1px solid var(--slate-700); color: var(--slate-300);
+    border-radius: 999px; padding: 8px 13px; font-size: 13px; cursor: pointer; font-weight: 600;
+  }
+  .preset:hover { border-color: var(--amber); color: var(--amber-light); }
+  .preset.active { background: var(--amber); color: #111827; border-color: var(--amber); }
+  .preset small { opacity: .75; font-weight: 500; }
+
+  /* rate card table */
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 6px; border-bottom: 1px solid var(--slate-800); vertical-align: top; }
+  th { color: var(--amber-light); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+  td { color: var(--slate-300); }
+  td.num { font-weight: 800; color: #f8fafc; white-space: nowrap; }
+  .rate-note { font-size: 12.5px; color: var(--slate-400); line-height: 1.6; margin-top: 12px; }
+  .rate-note b { color: var(--slate-300); }
+
+  /* history */
+  .hist-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .hist-head h2 { margin-bottom: 0; }
+  .clear-btn {
+    background: transparent; border: 1px solid var(--slate-700); color: var(--slate-400);
+    border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; font-weight: 600;
+  }
+  .clear-btn:hover { color: #fca5a5; border-color: #7f1d1d; }
+  #historyList { list-style: none; }
+  #historyList li {
+    display: flex; justify-content: space-between; gap: 10px; align-items: baseline;
+    padding: 10px 2px; border-bottom: 1px solid var(--slate-800); font-size: 13.5px;
+  }
+  #historyList .h-route { color: #f8fafc; font-weight: 600; line-height: 1.4; }
+  #historyList .h-meta { color: var(--slate-400); font-size: 12px; margin-top: 2px; }
+  #historyList .h-fare { font-weight: 800; color: var(--amber-light); white-space: nowrap; }
+  .empty { color: var(--slate-400); font-size: 13.5px; padding: 6px 0; }
+
+  footer { text-align: center; color: var(--slate-400); font-size: 13px; margin-top: 32px; line-height: 1.7; }
+  footer b { color: var(--slate-300); }
+  footer .src { font-size: 12px; }
+
+  #testout { display: none; }
+
+  @media (max-width: 420px) {
+    h1 { font-size: 25px; }
+    .row, .toggles { grid-template-columns: 1fr; }
+    .panel { padding: 16px; }
+    .fare-big .amount { font-size: 40px; }
+  }
+</style>
+</head>
+<body>
+<div class="road" aria-hidden="true"></div>
+<div class="wrap">
+
+  <header>
+    <span class="bus-badge">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5"/><path d="M3 11h18v7a1 1 0 0 1-1 1h-1a2 2 0 1 1-4 0H9a2 2 0 1 1-4 0H4a1 1 0 0 1-1-1v-7z"/><path d="M3 15h18"/><path d="M7 7h.01M17 7h.01"/></svg>
+      BRTA Official Rates
+    </span>
+    <h1>Bus Fare<br>Calculator <span>BD</span></h1>
+    <p class="sub">Work out the correct bus fare for any trip in Bangladesh — using the real BRTA per-kilometre rates.</p>
+    <span class="rate-chip">Rates effective 22 September 2026 &middot; Diesel buses</span>
+  </header>
+
+  <!-- ============ CALCULATOR ============ -->
+  <section class="panel" aria-label="Fare calculator">
+    <h2>Calculate your fare</h2>
+
+    <label class="field-label" id="routeTypeLabel">Route type</label>
+    <div class="seg" role="radiogroup" aria-labelledby="routeTypeLabel">
+      <label>
+        <input type="radio" name="routeType" value="city" checked>
+        <span><span class="t">City bus — Dhaka &amp; Chattogram</span><div class="d">City service inside Dhaka and Chattogram city areas</div></span>
+        <span class="r">৳2.70/km</span>
+      </label>
+      <label>
+        <input type="radio" name="routeType" value="dtca">
+        <span><span class="t">City minibus &amp; DTCA area</span><div class="d">Minibus, and bus/minibus in Dhaka, Narayanganj, Munshiganj, Narsingdi, Gazipur &amp; Manikganj</div></span>
+        <span class="r">৳2.60/km</span>
+      </label>
+      <label>
+        <input type="radio" name="routeType" value="inter">
+        <span><span class="t">Inter-district / long-distance</span><div class="d">Bus &amp; minibus between districts</div></span>
+        <span class="r">৳2.40/km</span>
+      </label>
+    </div>
+
+    <div class="row">
+      <div>
+        <label class="field-label" for="distance">Distance (km)</label>
+        <input type="number" id="distance" min="0" step="0.1" inputmode="decimal" placeholder="e.g. 10">
+        <div class="hint">Check the fare chart on your ticket, or use a popular route below.</div>
+      </div>
+      <div>
+        <label class="field-label" for="toll">Toll / bridge charge (৳)</label>
+        <input type="number" id="toll" min="0" step="1" inputmode="numeric" placeholder="0" value="0">
+        <div class="hint">Padma Bridge, expressway toll etc. — added in full, never discounted.</div>
+      </div>
+    </div>
+
+    <div class="toggles">
+      <label class="toggle" for="student">
+        <span><span class="tt">Student half fare</span><div class="td">BRTA rule: students pay half the bus fare</div></span>
+        <span class="switch"><input type="checkbox" id="student"><span class="track"></span></span>
+      </label>
+      <label class="toggle" for="seat40">
+        <span><span class="tt">40-seater bus</span><div class="td">Long routes: fare &times; 51/40 (BRTA rule)</div></span>
+        <span class="switch"><input type="checkbox" id="seat40"><span class="track"></span></span>
+      </label>
+    </div>
+
+    <button class="calc-btn" id="calcBtn" type="button">Calculate Fare</button>
+    <p class="error" id="errorMsg" role="alert"></p>
+
+    <!-- ticket stub result -->
+    <div id="result" aria-live="polite">
+      <div class="ticket">
+        <div class="ticket-head">
+          <span class="th-t">Bus Fare Ticket</span>
+          <span class="th-n" id="ticketNo">BF-0000</span>
+        </div>
+        <div class="ticket-body">
+          <div class="ticket-route"><span id="ticketRoute">City bus</span><small id="ticketMeta"></small></div>
+          <div class="fare-big">
+            <div><span class="cur">৳</span><span class="amount" id="ticketTotal">0</span></div>
+            <div class="lbl">Total fare</div>
+          </div>
+          <div class="perf" aria-hidden="true"></div>
+        </div>
+        <div class="breakdown" id="breakdown"></div>
+        <div class="ticket-foot">BRTA Rates &middot; 22 Sept 2026</div>
+      </div>
+      <div class="ticket-actions">
+        <button class="btn-copy" id="copyBtn" type="button">Copy fare</button>
+        <button class="btn-clear-ticket" id="newCalcBtn" type="button">New calculation</button>
+      </div>
+      <p class="copied-msg" id="copiedMsg">Fare copied to clipboard.</p>
+    </div>
+  </section>
+
+  <!-- ============ POPULAR ROUTES ============ -->
+  <section class="panel" aria-label="Popular routes">
+    <h2>Popular routes</h2>
+    <div class="presets" id="presets"></div>
+    <p class="hint" style="margin-top:12px;">Tap a route to fill in its distance (and toll where known). Distances are from BRTA fare charts.</p>
+  </section>
+
+  <!-- ============ RATE CARD ============ -->
+  <section class="panel" aria-label="BRTA fare table">
+    <h2>BRTA fare card — effective 22 Sept 2026</h2>
+    <table>
+      <thead>
+        <tr><th>Service</th><th>Per km</th><th>Minimum</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>City bus — Dhaka &amp; Chattogram</td><td class="num">৳2.70</td><td class="num">৳10</td></tr>
+        <tr><td>City minibus &amp; DTCA-area bus/minibus</td><td class="num">৳2.60</td><td class="num">৳8</td></tr>
+        <tr><td>Inter-district / long-distance bus &amp; minibus</td><td class="num">৳2.40</td><td class="num">—</td></tr>
+      </tbody>
+    </table>
+    <p class="rate-note">
+      <b>Diesel buses only.</b> Gas-run (CNG) buses are not covered by these rates.
+      AC and premium buses, tolls and terminal charges are extra.
+      Students pay half fare under the BRTA rule. On long routes, 40-seater buses
+      charge the fare &times; 51/40. Fares are rounded to the nearest whole taka.
+    </p>
+  </section>
+
+  <!-- ============ HISTORY ============ -->
+  <section class="panel" aria-label="Recent calculations">
+    <div class="hist-head">
+      <h2>Recent calculations</h2>
+      <button class="clear-btn" id="clearHistoryBtn" type="button">Clear all</button>
+    </div>
+    <ul id="historyList"></ul>
+    <p class="empty" id="historyEmpty">No calculations yet — your recent fares will appear here, saved on this device.</p>
+  </section>
+
+  <footer>
+    <b>Built by Nafiz Bin Azad</b>
+    <div class="src">Rates: BRTA government gazette, effective 22 September 2026. Fares shown are estimates from the published per-km rates — the conductor's printed fare chart is final.</div>
+  </footer>
+</div>
+
+<div id="testout" aria-hidden="true"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  var RATES = {
+    city:  { label: "City bus — Dhaka & Chattogram", rate: 2.70, min: 10 },
+    dtca:  { label: "City minibus & DTCA area",    rate: 2.60, min: 8 },
+    inter: { label: "Inter-district / long-distance", rate: 2.40, min: 0 }
+  };
+  var SEAT40_FACTOR = 51 / 40;
+  var HISTORY_KEY = "busfare_history";
+  var HISTORY_MAX = 20;
+
+  var PRESETS = [
+    { name: "Gulistan – Gazipur",      km: 41.5, type: "dtca",  toll: 0,   note: "" },
+    { name: "Mirpur Zoo – Keraniganj", km: 21,   type: "city",  toll: 0,   note: "" },
+    { name: "Sayedabad – Chattogram", km: 242,  type: "inter", toll: 450, note: "" },
+    { name: "Sayedabad – Cumilla",    km: 102,  type: "inter", toll: 0,   note: "" },
+    { name: "Sayedabad – Sylhet",     km: 257,  type: "inter", toll: 0,   note: "" },
+    { name: "Gabtoli – Barishal",     km: 242,  type: "inter", toll: 0,   note: "Ferry fare extra — not included" }
+  ];
+
+  function $(id) { return document.getElementById(id); }
+  function tk(n) { return "৳" + n.toLocaleString("en-IN"); }
+  function roundTaka(n) { return Math.round(n); } /* nearest whole taka; .50 rounds up */
+
+  /* ---- core fare math (pure, testable) ---- */
+  function calcFare(type, km, toll, isStudent, is40Seat) {
+    var r = RATES[type];
+    var raw = km * r.rate;                       /* km x rate */
+    var floored = r.min > 0 ? Math.max(r.min, raw) : raw; /* minimum-fare floor */
+    var minApplied = floored > raw;
+    var seatAdj = is40Seat ? floored * SEAT40_FACTOR : floored;
+    var discounted = isStudent ? seatAdj / 2 : seatAdj;
+    var fareRounded = roundTaka(discounted);     /* nearest whole taka */
+    var total = fareRounded + (toll || 0);       /* toll added in full, never discounted */
+    return {
+      type: type, label: r.label, rate: r.rate, km: km, toll: toll || 0,
+      raw: raw, floored: floored, minApplied: minApplied,
+      seatAdj: seatAdj, discounted: discounted,
+      fare: fareRounded, total: total,
+      isStudent: isStudent, is40Seat: is40Seat
+    };
+  }
+
+  function getRouteType() {
+    var checked = document.querySelector('input[name="routeType"]:checked');
+    return checked ? checked.value : "city";
+  }
+
+  function showError(msg) {
+    var el = $("errorMsg");
+    el.textContent = msg;
+    el.style.display = msg ? "block" : "none";
+  }
+
+  function breakdownHtml(f) {
+    var rows = [];
+    rows.push('<div class="line"><span>' + f.km + ' km &times; ৳' + f.rate.toFixed(2) + ' / km</span><span>' + tk(+f.raw.toFixed(2)) + '</span></div>');
+    if (f.minApplied) {
+      rows.push('<div class="line"><span>Minimum fare applies</span><span>' + tk(RATES[f.type].min) + '</span></div>');
+    }
+    if (f.is40Seat) {
+      rows.push('<div class="line"><span>40-seater &times; 51/40</span><span>' + tk(+f.seatAdj.toFixed(2)) + '</span></div>');
+    }
+    if (f.isStudent) {
+      rows.push('<div class="line"><span>Student half fare</span><span>' + tk(+f.discounted.toFixed(2)) + '</span></div>');
+    }
+    rows.push('<div class="line"><span>Bus fare (rounded)</span><span>' + tk(f.fare) + '</span></div>');
+    if (f.toll > 0) {
+      rows.push('<div class="line"><span>Toll / bridge charge</span><span>+ ' + tk(f.toll) + '</span></div>');
+    }
+    rows.push('<div class="line total"><span>Total payable</span><span>' + tk(f.total) + '</span></div>');
+    var note = "Rounded to the nearest whole taka (৳0.50 rounds up).";
+    if (window.__activePresetNote) { note += " " + window.__activePresetNote; }
+    rows.push('<div class="note">' + note + '</div>');
+    return rows.join("");
+  }
+
+  function calculate() {
+    var km = parseFloat($("distance").value);
+    var toll = parseFloat($("toll").value);
+    if (isNaN(toll) || toll < 0) { toll = 0; }
+    if (isNaN(km) || km <= 0) {
+      showError("Please enter a distance greater than 0 km.");
+      $("result").style.display = "none";
+      return null;
+    }
+    showError("");
+    var f = calcFare(getRouteType(), km, toll, $("student").checked, $("seat40").checked);
+    $("ticketNo").textContent = "BF-" + String(Math.floor(1000 + Math.random() * 9000));
+    $("ticketRoute").textContent = f.label;
+    $("ticketMeta").textContent = f.km + " km" + (f.isStudent ? " · Student" : "") + (f.is40Seat ? " · 40-seater" : "") + (f.toll > 0 ? " · Toll " + tk(f.toll) : "");
+    $("ticketTotal").textContent = f.total.toLocaleString("en-IN");
+    $("breakdown").innerHTML = breakdownHtml(f);
+    $("result").style.display = "block";
+    $("copiedMsg").style.display = "none";
+    saveHistory(f);
+    renderHistory();
+    return f;
+  }
+
+  /* ---- history (localStorage, busfare_ prefix) ---- */
+  function loadHistory() {
+    try {
+      var raw = localStorage.getItem(HISTORY_KEY);
+      var arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) { return []; }
+  }
+  function saveHistory(f) {
+    var arr = loadHistory();
+    arr.unshift({
+      label: f.label, km: f.km, toll: f.toll, total: f.total,
+      student: f.isStudent, seat40: f.is40Seat, when: new Date().toISOString()
+    });
+    arr = arr.slice(0, HISTORY_MAX);
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(arr)); } catch (e) {}
+  }
+  function renderHistory() {
+    var arr = loadHistory();
+    var list = $("historyList");
+    $("historyEmpty").style.display = arr.length ? "none" : "block";
+    list.innerHTML = arr.map(function (h) {
+      var meta = h.km + " km" + (h.student ? " · Student" : "") + (h.seat40 ? " · 40-seater" : "") + (h.toll ? " · Toll " + tk(h.toll) : "");
+      var d = new Date(h.when);
+      var when = isNaN(d.getTime()) ? "" : " · " + d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+      return '<li><div><div class="h-route">' + escapeHtml(h.label) + '</div><div class="h-meta">' + meta + when + '</div></div><span class="h-fare">' + tk(h.total) + '</span></li>';
+    }).join("");
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  /* ---- presets ---- */
+  function buildPresets() {
+    var box = $("presets");
+    PRESETS.forEach(function (p, i) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "preset";
+      b.innerHTML = escapeHtml(p.name) + " <small>" + p.km + " km" + (p.toll ? " · toll " + tk(p.toll) : "") + "</small>";
+      b.addEventListener("click", function () {
+        document.querySelectorAll(".preset").forEach(function (x) { x.classList.remove("active"); });
+        b.classList.add("active");
+        document.querySelector('input[name="routeType"][value="' + p.type + '"]').checked = true;
+        $("distance").value = p.km;
+        $("toll").value = p.toll;
+        window.__activePresetNote = p.note || "";
+        calculate();
+        $("result").scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
+      box.appendChild(b);
+    });
+  }
+
+  /* ---- events ---- */
+  $("calcBtn").addEventListener("click", calculate);
+  $("distance").addEventListener("keydown", function (e) { if (e.key === "Enter") { calculate(); } });
+  $("toll").addEventListener("keydown", function (e) { if (e.key === "Enter") { calculate(); } });
+  $("newCalcBtn").addEventListener("click", function () {
+    $("result").style.display = "none";
+    $("distance").value = "";
+    $("toll").value = 0;
+    document.querySelectorAll(".preset").forEach(function (x) { x.classList.remove("active"); });
+    window.__activePresetNote = "";
+    $("distance").focus();
+  });
+  $("copyBtn").addEventListener("click", function () {
+    var text = "Bus fare: " + tk(parseInt($("ticketTotal").textContent.replace(/[^\d]/g, ""), 10) || 0) +
+      " — " + $("ticketRoute").textContent + " (" + $("ticketMeta").textContent + ")";
+    function done() { $("copiedMsg").style.display = "block"; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, done);
+    } else { done(); }
+  });
+  $("clearHistoryBtn").addEventListener("click", function () {
+    try { localStorage.removeItem(HISTORY_KEY); } catch (e) {}
+    renderHistory();
+  });
+
+  buildPresets();
+  renderHistory();
+
+  /* test hooks: window.__busfare + ?test=1 self-test driving the real UI */
+  window.__busfare = { calcFare: calcFare, RATES: RATES, PRESETS: PRESETS, HISTORY_KEY: HISTORY_KEY };
+  window.__activePresetNote = "";
+
+  function runSelfTests() {
+    var out = [];
+    function check(name, cond, detail) { out.push((cond ? "PASS" : "FAIL") + " | " + name + " | " + detail); }
+    function set(type, km, toll, student, seat40) {
+      document.querySelector('input[name="routeType"][value="' + type + '"]').checked = true;
+      $("distance").value = km;
+      $("toll").value = toll;
+      $("student").checked = student;
+      $("seat40").checked = seat40;
+    }
+    try {
+      set("city", 10, 0, false, false);
+      var f1 = calculate();
+      check("10km city = 27", f1 && f1.total === 27, "got " + (f1 && f1.total));
+      set("city", 2, 0, false, false);
+      var f2 = calculate();
+      check("2km city minimum = 10", f2 && f2.total === 10, "got " + (f2 && f2.total));
+      set("city", 10, 0, true, false);
+      var f3 = calculate();
+      check("student 10km city = 14 (13.50 rounds up)", f3 && f3.total === 14, "got " + (f3 && f3.total));
+      set("inter", 242, 450, false, false);
+      var f4 = calculate();
+      check("Sayedabad-Chattogram 242km inter + 450 toll = 1031", f4 && f4.total === 1031, "got " + (f4 && f4.total));
+      set("inter", 242, 450, false, true);
+      var f5 = calculate();
+      check("40-seat 242km inter: 580.80*51/40=740.52->741 +450 = 1191", f5 && f5.total === 1191, "got " + (f5 && f5.total));
+      set("dtca", 41.5, 0, false, false);
+      var f6 = calculate();
+      check("Gulistan-Gazipur 41.5km dtca = 108", f6 && f6.total === 108, "got " + (f6 && f6.total));
+      var hist = loadHistory();
+      check("history saved (>=6 entries)", hist.length >= 6, "count=" + hist.length);
+      check("history first entry total matches last calc", hist.length && hist[0].total === 108, "first=" + (hist[0] && hist[0].total));
+      check("no horizontal overflow at current width", document.documentElement.scrollWidth <= window.innerWidth + 1,
+        "scrollWidth=" + document.documentElement.scrollWidth + " innerWidth=" + window.innerWidth);
+      check("result ticket visible", $("result").style.display === "block", "display=" + $("result").style.display);
+      /* preset click test */
+      var presetBtns = document.querySelectorAll(".preset");
+      presetBtns[2].click();
+      check("preset Sayedabad-Chattogram fills 242km + 450 toll + inter", $("distance").value === "242" && $("toll").value === "450" && getRouteType() === "inter",
+        "dist=" + $("distance").value + " toll=" + $("toll").value + " type=" + getRouteType());
+      check("preset total = 1031", $("ticketTotal").textContent.replace(/[^\d]/g, "") === "1031", "shown=" + $("ticketTotal").textContent);
+    } catch (e) {
+      out.push("FAIL | exception | " + e.message);
+    }
+    var errors = window.__jsErrors || [];
+    out.push((errors.length === 0 ? "PASS" : "FAIL") + " | zero JS errors | " + errors.length + " errors: " + errors.join("; "));
+    $("testout").textContent = out.join("\n");
+    $("testout").style.display = "block";
+  }
+  window.addEventListener("error", function (e) {
+    window.__jsErrors = window.__jsErrors || [];
+    window.__jsErrors.push(e.message || String(e.error || "error"));
+  });
+  if (/[?&]test=1/.test(location.search)) {
+    window.addEventListener("load", function () { setTimeout(runSelfTests, 100); });
+  }
+})();
+</script>
+</body>
+</html>
